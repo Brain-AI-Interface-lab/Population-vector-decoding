@@ -150,3 +150,96 @@ end
 
 """Percentage of decoded directions within ±`limit` degrees (8-way correct for 22.5°)."""
 percent_within(errors; limit=22.5) = 100 * mean(abs.(errors) .<= limit)
+
+# ---------------------------------------------------------------------------
+# Time-resolved population vector
+#
+# Rates are counted in a sliding window aligned to movement onset. Tuning is
+# still fitted on the training trials' epoch rates (one fit per fold), and the
+# population vector is computed from held-out trials at every time step.
+
+"""
+    windowed_rates(session, trials, units; times, window=0.1)
+
+Rates in a sliding window of `window` seconds centred on each of `times`
+(seconds relative to movement onset). Returns an array (trials × units × times).
+"""
+function windowed_rates(session::ReachSession, trials::DataFrame, units;
+                        times=-0.4:0.02:0.6, window::Real=0.1)
+    rates = zeros(nrow(trials), length(units), length(times))
+    for (row, event) in enumerate(eachrow(trials)), (col, unit) in enumerate(units)
+        spikes = spike_times(session, event.trial, unit; relative_to=:absolute) .- event.movement_onset
+        for (k, t) in enumerate(times)
+            rates[row, col, k] = _spike_count(spikes, t - window / 2, t + window / 2) / window
+        end
+    end
+    return rates
+end
+
+"""Mean planar hand speed per direction at each of `times` (relative to movement onset)."""
+function hand_speed_by_direction(session::ReachSession, trials::DataFrame; times=-0.4:0.02:0.6)
+    rows = NamedTuple[]
+    for d in sort(unique(trials.direction)), (k, t) in enumerate(times)
+        speeds = Float64[]
+        for event in eachrow(trials[trials.direction .== d, :])
+            time = session.times[event.trial]
+            i = findfirst(>=(event.movement_onset + t), time)
+            i === nothing && continue
+            velocity = session.hand_vel[event.trial]
+            push!(speeds, hypot(velocity[i, 1], velocity[i, 2]))
+        end
+        push!(rows, (direction=d, time=t, speed=mean(speeds)))
+    end
+    return DataFrame(rows)
+end
+
+"""
+    time_resolved_pv(windowed, epoch_rates, trials, folds; times, r2_min=0.7)
+
+Direction-averaged population vector at every time step, cross-validated.
+For each fold, tuning is fitted on the training trials' `epoch_rates`; the
+held-out trials' windowed rates are averaged per direction and decoded.
+Vectors are averaged over folds. Returns one row per (direction, time).
+"""
+function time_resolved_pv(windowed::AbstractArray{<:Real,3}, epoch_rates::AbstractMatrix,
+                          trials::DataFrame, folds; times=-0.4:0.02:0.6, r2_min=0.7)
+    directions = trials.direction
+    direction_values = sort(unique(directions))
+    x = zeros(length(direction_values), length(times))
+    y = zeros(length(direction_values), length(times))
+    n_folds = 0
+
+    for fold in sort(unique(folds))
+        train = folds .!= fold
+        fits = fit_all_units(epoch_rates[train, :], directions[train])
+        units_used = findall(fit -> is_tuned(fit, r2_min), fits)
+        isempty(units_used) && continue
+        n_folds += 1
+        for (j, d) in enumerate(direction_values)
+            rows = findall((folds .== fold) .& (directions .== d))
+            isempty(rows) && continue
+            for k in eachindex(times)
+                pv = population_vector(vec(mean(windowed[rows, :, k]; dims=1)), fits, units_used)
+                x[j, k] += pv.length * cosd(pv.angle)
+                y[j, k] += pv.length * sind(pv.angle)
+            end
+        end
+    end
+
+    rows = NamedTuple[]
+    for (j, d) in enumerate(direction_values), (k, t) in enumerate(times)
+        px = x[j, k] / n_folds
+        py = y[j, k] / n_folds
+        push!(rows, (direction=d, time=t, x=px, y=py,
+                     angle=mod(atand(py, px), 360), length=hypot(px, py)))
+    end
+    table = DataFrame(rows)
+    table.error_target = wrap180.(table.angle .- table.direction)
+    return table
+end
+
+"""First time at which `values` reaches `fraction` of its maximum."""
+function time_to_fraction(times, values; fraction=0.5)
+    threshold = minimum(values) + fraction * (maximum(values) - minimum(values))
+    return times[findfirst(>=(threshold), values)]
+end

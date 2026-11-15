@@ -71,6 +71,8 @@ function main(args=ARGS)
                   joinpath(out, "tuning_summary_$tag.png"))
     Plots.savefig(plot_population_vectors(averaged, trials), joinpath(out, "pv_direction_mean_$tag.png"))
     Plots.savefig(plot_single_trial_pv(single, null_median_error), joinpath(out, "pv_single_trial_$tag.png"))
+    animate_population_vectors(averaged, trials, rates, fits, findall(f -> is_tuned(f, R2_MIN), fits);
+                               path=joinpath(out, "pv_direction_mean_$tag.gif"))
 
     deg(x) = "$(round(x; digits=1))°"
     summary = """

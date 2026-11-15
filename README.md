@@ -1,10 +1,16 @@
 # Population-vector decoding of reach direction in M1
 
+**English** · [한국어](README.ko.md)
+
 Directional tuning and population-vector decoding (Georgopoulos et al., 1982,
 1986) applied to the public center-out reaching data of Flint et al. (2012).
 Written in Julia as a study project.
 
-![Direction-averaged population vectors](outputs/population_vector/pv_direction_mean_tet.png)
+![Population vectors built from unit contributions](outputs/population_vector/pv_direction_mean_tet.gif)
+
+For each target, thin lines are the contributions of tuned units (weight × PD).
+Their sum is the population vector (blue), shown next to the mean actual
+movement (grey). Population vectors are from held-out trials.
 
 ## Data
 
@@ -30,13 +36,15 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 julia --project=. scripts/01_single_unit_tuning.jl
 julia --project=. scripts/02_population_vector.jl data/Flint_2012_e1.mat tet
 julia --project=. scripts/02_population_vector.jl data/Flint_2012_e1.mat mt
+julia --project=. scripts/03_time_resolved_pv.jl
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
 | Script | What it does | Output |
 | --- | --- | --- |
 | `01_single_unit_tuning.jl` | Tuning curve, raster and PSTH for one unit (unit 3 by default) | `outputs/single_unit/` |
-| `02_population_vector.jl` | Tuning of all units, cross-validated population vector, shuffle test | `outputs/population_vector/` |
+| `02_population_vector.jl` | Tuning of all units, cross-validated population vector, shuffle test, animation | `outputs/population_vector/` |
+| `03_time_resolved_pv.jl` | Population vector in a sliding window around movement onset | `outputs/time_resolved/` |
 
 ## Method
 
@@ -79,6 +87,24 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 ![Single-trial PV and shuffle null](outputs/population_vector/pv_single_trial_tet.png)
 ![Tuning summary](outputs/population_vector/tuning_summary_tet.png)
 
+### Time course
+
+The population vector can also be computed in a 100 ms window that slides in
+20 ms steps around movement onset (tuning from training folds, vectors from
+held-out trials, as above).
+
+![Population vector over time](outputs/time_resolved/pv_time_resolved.gif)
+
+- The population vector grows **before** the hand moves. Its length reaches
+  half of its range at −60 ms, while hand speed does so at +40 ms: a lead of
+  about 100 ms.
+- Its direction is already close to the target before movement onset (median
+  error 21° at −100 ms, 12° at +200 ms), while 300 ms before onset it is
+  unrelated to the target (114°).
+- Windows are centred, so a value at −60 ms uses spikes from −110 to −10 ms.
+
+![PV length, hand speed, and direction error over time](outputs/time_resolved/pv_time_course.png)
+
 ### Limitations
 
 - Few tuned units prefer 225°–315°, so the vectors for the 270° and 315°
@@ -98,7 +124,7 @@ src/
   events.jl              target onset, movement onset and end
   tuning.jl              epoch firing rates, cosine fit
   perievent.jl           movement-aligned raster / PSTH data
-  population_vector.jl   cross-validated population-vector decoding
+  population_vector.jl   cross-validated population vector, also over time
   plotting.jl            figures
 scripts/                 analysis entry points (run in order)
 test/runtests.jl         tests on data structure, events, tuning, decoding

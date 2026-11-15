@@ -365,3 +365,141 @@ function plot_single_trial_pv(single::DataFrame, null_errors::AbstractVector)
     Plots.vline!(null, [observed]; color="#C0392B", linewidth=2)
     return Plots.plot(scatter, null; layout=(1, 2), size=(1050, 460), margin=5Plots.mm)
 end
+
+"""
+    animate_population_vectors(averaged, trials, rates, fits, units_used; path, fps=12)
+
+Animated version of `plot_population_vectors`. For each target in turn, the
+tuned units' contributions (weight × PD, from fits on all trials) appear first,
+then the cross-validated population vector is drawn next to the actual
+movement. Earlier targets stay on screen.
+"""
+function animate_population_vectors(averaged::DataFrame, trials::DataFrame, rates::AbstractMatrix,
+                                    fits, units_used; path::AbstractString, fps::Integer=12)
+    directions = sort(unique(trials.direction))
+    movement = Dict(d => circular_mean(trials.hand_angle[trials.direction .== d]) for d in directions)
+    decoded = Dict(d => circular_mean(averaged.pv_angle[averaged.direction .== d]) for d in directions)
+
+    # Each unit's contribution for each direction, scaled so the largest is 0.55.
+    contributions = Dict{Int,Vector{Tuple{Float64,Float64}}}()
+    for d in directions
+        mean_rates = vec(mean(rates[trials.direction .== d, :]; dims=1))
+        contributions[d] = map(units_used) do i
+            fit = fits[i]
+            weight = (mean_rates[i] - fit.b0) / fit.amplitude
+            (weight * cosd(fit.preferred_direction), weight * sind(fit.preferred_direction))
+        end
+    end
+    largest = maximum(hypot(v...) for vs in values(contributions) for v in vs)
+    scale = 0.55 / largest
+
+    function frame(done, current, vote_fraction, pv_fraction)
+        plot = Plots.plot(; aspect_ratio=:equal, xlims=(-1.35, 1.35), ylims=(-1.35, 1.35),
+                          axis=false, ticks=false, grid=false, legend=:outerbottom, legendcolumns=2,
+                          size=(600, 680), title="Population vector by target direction")
+        for d in directions
+            Plots.annotate!(plot, 1.22 * cosd(d), 1.22 * sind(d),
+                            Plots.text("$(d)°", 9, d == current ? INK : MUTED))
+        end
+        for d in done
+            _arrow!(plot, movement[d], 1.0; color="#B0B7C3", linewidth=5)
+            _arrow!(plot, decoded[d], 0.8; color=BLUE, linewidth=2.5)
+        end
+        if current !== nothing
+            for (x, y) in contributions[current]
+                Plots.plot!(plot, [0, vote_fraction * scale * x], [0, vote_fraction * scale * y];
+                            color="#8FAAD9", linewidth=1.4, label="")
+            end
+            pv_fraction > 0 && _arrow!(plot, movement[current], pv_fraction; color="#B0B7C3", linewidth=5)
+            pv_fraction > 0 && _arrow!(plot, decoded[current], 0.8 * pv_fraction; color=BLUE, linewidth=2.5)
+        end
+        Plots.plot!(plot, [NaN], [NaN]; color="#B0B7C3", linewidth=5, label="actual movement (mean)")
+        Plots.plot!(plot, [NaN], [NaN]; color=BLUE, linewidth=2.5, label="population vector")
+        Plots.plot!(plot, [NaN], [NaN]; color="#8FAAD9", linewidth=1.4, label="unit contributions")
+        return plot
+    end
+
+    animation = Plots.Animation()
+    for (k, d) in enumerate(directions)
+        done = directions[1:k-1]
+        for t in range(0.15, 1.0; length=6)
+            Plots.frame(animation, frame(done, d, t, 0.0))
+        end
+        for t in range(0.2, 1.0; length=5)
+            Plots.frame(animation, frame(done, d, 1.0, t))
+        end
+        for _ in 1:4
+            Plots.frame(animation, frame(done, d, 1.0, 1.0))
+        end
+    end
+    for _ in 1:fps * 2
+        Plots.frame(animation, frame(directions, nothing, 0.0, 0.0))
+    end
+    return Plots.gif(animation, path; fps=fps, show_msg=false)
+end
+
+"""
+    animate_time_resolved_pv(pv, speed; path, fps=10)
+
+Left: the population vector for each target direction (blue) evolving over
+time, with the target directions as grey spokes. Right: mean population-vector
+length and hand speed (both scaled to their maximum) with a moving time cursor.
+"""
+function animate_time_resolved_pv(pv::DataFrame, speed::DataFrame; path::AbstractString, fps::Integer=10)
+    times = sort(unique(pv.time))
+    directions = sort(unique(pv.direction))
+    scale = 1.0 / maximum(pv.length)
+    pv_curve = [mean(pv.length[pv.time .== t]) for t in times]
+    speed_curve = [mean(speed.speed[speed.time .== t]) for t in times]
+    pv_curve ./= maximum(pv_curve)
+    speed_curve ./= maximum(speed_curve)
+    ms = 1000 .* times
+
+    animation = Plots.Animation()
+    for (k, t) in enumerate(times)
+        vectors = Plots.plot(; aspect_ratio=:equal, xlims=(-1.3, 1.3), ylims=(-1.3, 1.3),
+                             axis=false, ticks=false, grid=false, legend=false,
+                             title="t = $(round(Int, 1000t)) ms from movement onset")
+        for d in directions
+            Plots.plot!(vectors, [0, 1.05cosd(d)], [0, 1.05sind(d)]; color=GRID, linewidth=1.5,
+                        linestyle=:dash)
+            Plots.annotate!(vectors, 1.2cosd(d), 1.2sind(d), Plots.text("$(d)°", 8, MUTED))
+            row = pv[(pv.direction .== d) .& (pv.time .== t), :][1, :]
+            _arrow!(vectors, row.angle, scale * row.length; color=BLUE, linewidth=2.5)
+        end
+
+        course = Plots.plot(ms, speed_curve; color="#B0B7C3", linewidth=3, label="hand speed",
+                            xlabel="time from movement onset (ms)", ylabel="fraction of maximum",
+                            ylims=(0, 1.08), legend=:topleft, grid=false,
+                            title="Population vector leads movement")
+        Plots.plot!(course, ms, pv_curve; color=BLUE, linewidth=2.5, label="PV length")
+        Plots.vline!(course, [0]; color=MUTED, linestyle=:dot, label="")
+        Plots.vline!(course, [1000t]; color="#C0392B", linewidth=1.5, label="")
+
+        Plots.frame(animation, Plots.plot(vectors, course; layout=Plots.grid(1, 2, widths=[0.48, 0.52]),
+                                          size=(1050, 480), margin=5Plots.mm))
+    end
+    return Plots.gif(animation, path; fps=fps, show_msg=false)
+end
+
+"""Static time course: PV length, hand speed, and PV angle error over time."""
+function plot_time_resolved_pv(pv::DataFrame, speed::DataFrame)
+    times = sort(unique(pv.time))
+    ms = 1000 .* times
+    pv_curve = [mean(pv.length[pv.time .== t]) for t in times]
+    speed_curve = [mean(speed.speed[speed.time .== t]) for t in times]
+    error_curve = [median(abs.(pv.error_target[pv.time .== t])) for t in times]
+
+    course = Plots.plot(ms, speed_curve ./ maximum(speed_curve); color="#B0B7C3", linewidth=3,
+                        label="hand speed", ylabel="fraction of maximum", ylims=(0, 1.08),
+                        legend=:topleft, title="Time course (mean over 8 directions)")
+    Plots.plot!(course, ms, pv_curve ./ maximum(pv_curve); color=BLUE, linewidth=2.5, label="PV length")
+    Plots.vline!(course, [0]; color=MUTED, linestyle=:dot, label="")
+
+    error = Plots.plot(ms, error_curve; color=BLUE, linewidth=2.5, legend=false,
+                       xlabel="time from movement onset (ms)", ylabel="median |error| (°)",
+                       ylims=(0, 180), yticks=0:45:180, title="PV direction error vs target")
+    Plots.hline!(error, [90]; color=GRID, linestyle=:dash)
+    Plots.vline!(error, [0]; color=MUTED, linestyle=:dot)
+    return Plots.plot(course, error; layout=(2, 1), size=(700, 650), link=:x, margin=5Plots.mm)
+end

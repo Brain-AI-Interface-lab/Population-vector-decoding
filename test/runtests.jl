@@ -84,4 +84,6 @@ end
 
     folds = stratified_folds(repeat(0:45:315, 5), 5, MersenneTwister(1))
     @test all(count(==(k), folds) == 8 for k in 1:5)
+
+    @test time_to_fraction([0.0, 1.0, 2.0, 3.0], [0.0, 1.0, 3.0, 4.0]) == 2.0
 end

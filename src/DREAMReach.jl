@@ -39,10 +39,12 @@ export target_onset, trial_events, movement_event_table,
 
 # population vector
 export decoding_trials, epoch_rates, fit_all_units, is_tuned, population_vector,
-       stratified_folds, cross_validated_pv, percent_within, circular_mean, wrap180
+       stratified_folds, cross_validated_pv, percent_within, circular_mean, wrap180,
+       windowed_rates, hand_speed_by_direction, time_resolved_pv, time_to_fraction
 
 # figures
 export plot_tuning_curve, plot_epoch_tuning, plot_perievent, plot_directional_perievent_grid,
-       plot_tuning_summary, plot_population_vectors, plot_single_trial_pv
+       plot_tuning_summary, plot_population_vectors, plot_single_trial_pv,
+       animate_population_vectors, animate_time_resolved_pv, plot_time_resolved_pv
 
 end
