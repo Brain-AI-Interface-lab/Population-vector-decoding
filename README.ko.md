@@ -66,6 +66,11 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 ## 결과
 
+선호 방향이 고르게 퍼진 튜닝 unit 6개입니다. 발화율이 운동 방향의 코사인 함수로
+잘 설명되고, unit마다 선호하는 방향이 다릅니다.
+
+![M1 unit 6개의 코사인 튜닝](outputs/population_vector/tuning_examples_tet.png)
+
 | 구간 | 집단 벡터 | 목표 방향과의 오차 (중앙값) | 실제 운동과의 오차 (중앙값) | 8방향 정답률 |
 | --- | --- | --- | --- | --- |
 | TET | 방향별 평균 | 11.9° | 14.9° | – |

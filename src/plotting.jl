@@ -503,3 +503,45 @@ function plot_time_resolved_pv(pv::DataFrame, speed::DataFrame)
     Plots.vline!(error, [0]; color=MUTED, linestyle=:dot)
     return Plots.plot(course, error; layout=(2, 1), size=(700, 650), link=:x, margin=5Plots.mm)
 end
+
+"""
+    plot_tuning_examples(rates, directions, fits, units; n=6, r2_min=0.7)
+
+Cosine tuning curves of `n` well-tuned units whose preferred directions are
+spread around the circle: direction means ± SEM with the fitted curve.
+"""
+function plot_tuning_examples(rates::AbstractMatrix, directions::AbstractVector, fits, units;
+                              n::Integer=6, r2_min=0.7)
+    tuned = findall(fit -> is_tuned(fit, r2_min), fits)
+    chosen = Int[]
+    for target in range(0, 360; length=n + 1)[1:n]
+        candidates = setdiff(tuned, chosen)
+        isempty(candidates) && break
+        distance(i) = abs(wrap180(fits[i].preferred_direction - target))
+        near = filter(i -> distance(i) <= 30, candidates)
+        push!(chosen, isempty(near) ? argmin(distance, candidates) : argmax(i -> fits[i].r_squared, near))
+    end
+    sort!(chosen; by=i -> fits[i].preferred_direction)
+
+    direction_values = sort(unique(directions))
+    angles = 0:2:360
+    panels = map(chosen) do i
+        fit = fits[i]
+        means = [mean(rates[directions .== d, i]) for d in direction_values]
+        sems = [std(rates[directions .== d, i]) / sqrt(count(==(d), directions)) for d in direction_values]
+        panel = Plots.plot(angles, fit.b0 .+ fit.b1 .* sind.(angles) .+ fit.b2 .* cosd.(angles);
+                           color=BLUE, linewidth=2.5, legend=false, xlims=(0, 360), xticks=0:90:360,
+                           ylims=(0, Inf),
+                           title="unit $(units[i]): PD $(round(Int, fit.preferred_direction))°, R² $(round(fit.r_squared; digits=2))",
+                           titlefontsize=10)
+        Plots.scatter!(panel, direction_values, means; yerror=sems, color=GOLD,
+                       markerstrokecolor=INK, markersize=5)
+        Plots.vline!(panel, [fit.preferred_direction]; color=BLUE_DARK, linestyle=:dash)
+        panel
+    end
+    rows = ceil(Int, length(panels) / 3)
+    return Plots.plot(panels...; layout=(rows, 3), size=(1100, 340 * rows),
+                      xlabel="movement direction (°)", ylabel="spikes/s",
+                      left_margin=6Plots.mm, bottom_margin=6Plots.mm,
+                      plot_title="Cosine tuning of M1 units (TET, all trials)", plot_titlefontsize=13)
+end

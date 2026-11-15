@@ -71,6 +71,12 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 ## Results
 
+Six tuned units with preferred directions spread around the circle: firing
+rate is well described by a cosine of movement direction, and each unit
+prefers a different direction.
+
+![Cosine tuning of six M1 units](outputs/population_vector/tuning_examples_tet.png)
+
 | Epoch | PV | Median error vs target | Median error vs actual movement | 8-way correct |
 | --- | --- | --- | --- | --- |
 | TET | direction-averaged | 11.9° | 14.9° | – |

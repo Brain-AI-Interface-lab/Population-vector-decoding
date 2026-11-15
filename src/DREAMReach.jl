@@ -45,6 +45,7 @@ export decoding_trials, epoch_rates, fit_all_units, is_tuned, population_vector,
 # figures
 export plot_tuning_curve, plot_epoch_tuning, plot_perievent, plot_directional_perievent_grid,
        plot_tuning_summary, plot_population_vectors, plot_single_trial_pv,
-       animate_population_vectors, animate_time_resolved_pv, plot_time_resolved_pv
+       animate_population_vectors, animate_time_resolved_pv, plot_time_resolved_pv,
+       plot_tuning_examples
 
 end

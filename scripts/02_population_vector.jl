@@ -69,6 +69,8 @@ function main(args=ARGS)
     Plots.default(fontfamily="Helvetica", framestyle=:box, grid=false)
     Plots.savefig(plot_tuning_summary(tuning; r2_min=R2_MIN, epoch=epoch),
                   joinpath(out, "tuning_summary_$tag.png"))
+    Plots.savefig(plot_tuning_examples(rates, trials.direction, fits, units; r2_min=R2_MIN),
+                  joinpath(out, "tuning_examples_$tag.png"))
     Plots.savefig(plot_population_vectors(averaged, trials), joinpath(out, "pv_direction_mean_$tag.png"))
     Plots.savefig(plot_single_trial_pv(single, null_median_error), joinpath(out, "pv_single_trial_$tag.png"))
     animate_population_vectors(averaged, trials, rates, fits, findall(f -> is_tuned(f, R2_MIN), fits);
