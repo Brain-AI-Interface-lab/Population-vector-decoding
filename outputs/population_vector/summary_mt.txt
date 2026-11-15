@@ -1,0 +1,18 @@
+Population-vector decoding, Flint_2012_e1.mat, epoch MT
+trials: 175   candidate units: 82   tuned (R² ≥ 0.7): 35
+cross-validation: 5 folds stratified by direction; units chosen on training folds
+                  (mean 34.3 units per fold)
+
+Direction-averaged PV (40 fold × direction means)
+  median |error| vs target:          10.8°
+  median |error| vs actual movement: 11.5°
+
+Single-trial PV (175 trials)
+  median |error| vs target:          14.8°
+  median |error| vs actual movement: 15.8°
+  within ±22.5° of target:           66.3% (chance 12.5%)
+
+Label-shuffle null (200 shuffles)
+  median |error| vs movement:        90.0° (5th percentile 64.3°)
+  within ±22.5° of target:           12.5%
+  p (null error ≤ observed):         0.005
